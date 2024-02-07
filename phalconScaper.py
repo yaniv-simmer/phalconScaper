@@ -1,18 +1,48 @@
 import requests
 from pathlib import Path
 import os
+from datetime import datetime
 
 class AttackIncident:
     """
     A class to represent an attack incident.
     """
-    def __init__(self, project, loss, chain, vulnerability, date, transactions):
+    def __init__(self, project: str, loss: float, vulnerability: str, transactions: list):
         self.project = project
         self.loss = loss
-        self.chain = chain
         self.vulnerability = vulnerability
-        self.date = date
-        self.transactions = transactions
+        transactions_data = []
+        for txn in transactions:
+            new_tx = {}
+            new_tx['tx_hash'] = txn['txnHash']
+            date , time = convert_txn_date(txn['txnHashDate'])
+            new_tx['tx_date'] = date
+            new_tx['tx_time'] = time    
+            new_tx['tx_chain'] = txn['chainId']
+
+            transactions_data.append(new_tx)
+        self.transactions = transactions_data
+
+
+def convert_txn_date(txn_hash_date):
+    """
+    Converts a timestamp from milliseconds to a formatted date string.
+
+    Parameters:
+        txn_hash_date (int): The timestamp in milliseconds to be converted.
+
+    Returns:
+        str: The formatted date string in 'DD:MM:YYYY , HH:MM' format.
+    """
+    # Convert from milliseconds to seconds
+    date_in_seconds = txn_hash_date / 1000
+    # Convert to datetime object
+    date_obj = datetime.utcfromtimestamp(date_in_seconds)
+    # Format date and time
+    date , time = date_obj.strftime('%d:%m:%Y , %H:%M').split(',')
+    return date , time
+
+
 
 def process_data(data: dict) -> list[AttackIncident]:
     """
@@ -28,10 +58,9 @@ def process_data(data: dict) -> list[AttackIncident]:
     for attack in data['list']:
         incident = AttackIncident(project=attack['project'],
                                   loss=attack['loss'],
-                                  chain=attack['chainIds'],
                                   vulnerability=attack['rootCause'],
-                                  date=attack['date'],
                                   transactions=attack['transactions'])
+        #print(attack['transactions'],'\n\n')
         attack_incidents_list.append(incident)
     return attack_incidents_list
 
@@ -61,14 +90,22 @@ def write_to_csv(attack_incidents_list: list[AttackIncident]) -> None:
         attack_incidents_list (list[AttackIncident]): The list of AttackIncident objects to write.
     """
     with open('out/attack_incidents.csv', 'w') as file:
-        file.write('Project, Loss, Chain, Vulnerability, Date, Transactions\n')
-        for incident in attack_incidents_list:
-            file.write(f"{incident.project},\
-                {incident.loss},\
-                {incident.chain},\
-                {incident.vulnerability},\
-                {incident.date},\
-                {incident.transactions}\n")
+        file.write('Project, Loss, Vulnerability, Transactions, Date, Time, Chain\n')
+        for attack_incidents in attack_incidents_list:  
+            file.write(f'{attack_incidents.project},\
+                {attack_incidents.loss},\
+                {attack_incidents.vulnerability}')
+            for i, tx in enumerate(attack_incidents.transactions):
+                # Write each transaction under the Transaction column
+                if (i != 0):
+                    file.write(' , ,')
+                tx_hash = tx['tx_hash']
+                tx_date = tx['tx_date']
+                tx_time = tx['tx_time']
+                tx_chain = tx['tx_chain']
+                file.write(f',{tx_hash},{tx_date},{tx_time},{tx_chain}\n')
+                print(f'{tx_date},{tx_time},{tx_chain}\n')
+            
 
 def main():
     """
@@ -93,3 +130,11 @@ def main():
 if __name__ == "__main__":
     main()
 
+url = "https://phalcon.blocksec.com/api/v1/attack/events"
+json_data = {
+    "page": 1,
+    "pageSize": 200,
+    "endTime": 1735682399000,
+    "date": "desc"
+}
+data = make_request(url, json_data)
