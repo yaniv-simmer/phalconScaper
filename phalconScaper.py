@@ -5,7 +5,14 @@ from datetime import datetime
 
 class AttackIncident:
     """
-    A class to represent an attack incident.
+    A class to represent an attack incident, encapsulating details about the project affected,
+    the financial loss incurred, the type of vulnerability exploited, and the transactions involved.
+    
+    Attributes:
+        project (str): The name of the project attacked.
+        loss (float): The financial loss incurred due to the attack, in USD.
+        vulnerability (str): The type of vulnerability exploited in the attack.
+        transactions (list): A list of dictionaries, each representing a transaction involved in the attack.
     """
     def __init__(self, project: str, loss: float, vulnerability: str, transactions: list):
         self.project = project
@@ -15,7 +22,7 @@ class AttackIncident:
         for txn in transactions:
             new_tx = {}
             new_tx['tx_hash'] = txn['txnHash']
-            date , time = convert_txn_date(txn['txnHashDate'])
+            date, time = convert_txn_date(txn['txnHashDate'])
             new_tx['tx_date'] = date
             new_tx['tx_time'] = time    
             new_tx['tx_chain'] = txn['chainId']
@@ -24,23 +31,24 @@ class AttackIncident:
         self.transactions = transactions_data
 
 
-def convert_txn_date(txn_hash_date):
+def convert_txn_date(txn_hash_date: int) -> tuple[str, str]:
     """
-    Converts a timestamp from milliseconds to a formatted date string.
+    Converts a timestamp from milliseconds to a formatted date and time string.
 
     Parameters:
         txn_hash_date (int): The timestamp in milliseconds to be converted.
 
     Returns:
-        str: The formatted date string in 'DD:MM:YYYY , HH:MM' format.
+        tuple[str, str]: A tuple containing the formatted date string in 'YYYY-MM-DD' format
+                         and the time string in 'HH:MM' format.
     """
     # Convert from milliseconds to seconds
     date_in_seconds = txn_hash_date / 1000
     # Convert to datetime object
     date_obj = datetime.utcfromtimestamp(date_in_seconds)
     # Format date and time
-    date , time = date_obj.strftime('%d:%m:%Y , %H:%M').split(',')
-    return date , time
+    date, time = date_obj.strftime('%Y-%m-%d , %H:%M').split(',')
+    return date, time
 
 
 
@@ -49,10 +57,10 @@ def process_data(data: dict) -> list[AttackIncident]:
     Processes the raw data into a list of AttackIncident objects.
 
     Parameters:
-        data (dict): The raw data to process.
+        data (dict): The raw data to process, expected to contain a list of attack incidents.
 
     Returns:
-        list[AttackIncident]: A list of AttackIncident objects.
+        list[AttackIncident]: A list of AttackIncident objects, each representing an attack incident.
     """
     attack_incidents_list = []
     for attack in data['list']:
@@ -60,20 +68,19 @@ def process_data(data: dict) -> list[AttackIncident]:
                                   loss=attack['loss'],
                                   vulnerability=attack['rootCause'],
                                   transactions=attack['transactions'])
-        #print(attack['transactions'],'\n\n')
         attack_incidents_list.append(incident)
     return attack_incidents_list
 
 def make_request(url: str, json_data: dict) -> dict:
     """
-    Makes a POST request to the specified URL with the given JSON data.
+    Makes a POST request to the specified URL with the given JSON data and returns the JSON response.
 
     Parameters:
         url (str): The URL to make the request to.
         json_data (dict): The JSON data to send in the request.
 
     Returns:
-        dict: The JSON response data.
+        dict: The JSON response data, or None if the response is empty.
     """
     response = requests.post(url=url, json=json_data)
     if response.text:
@@ -84,35 +91,34 @@ def make_request(url: str, json_data: dict) -> dict:
 
 def write_to_csv(attack_incidents_list: list[AttackIncident]) -> None:
     """
-    Writes a list of AttackIncident objects to a CSV file.
+    Writes a list of AttackIncident objects to a CSV file, creating a structured report.
 
     Parameters:
         attack_incidents_list (list[AttackIncident]): The list of AttackIncident objects to write.
     """
     with open('out/attack_incidents.csv', 'w') as file:
         file.write('Project, Loss, Vulnerability, Transactions, Date, Time, Chain\n')
-        for attack_incidents in attack_incidents_list:  
-            file.write(f'{attack_incidents.project},\
-                {attack_incidents.loss},\
-                {attack_incidents.vulnerability}')
-            for i, tx in enumerate(attack_incidents.transactions):
+        for attack_incident in attack_incidents_list:  
+            file.write(f'{attack_incident.project},\
+                {attack_incident.loss},\
+                {attack_incident.vulnerability}')
+            for i, tx in enumerate(attack_incident.transactions):
                 # Write each transaction under the Transaction column
-                if (i != 0):
+                if i != 0:
                     file.write(' , ,')
                 tx_hash = tx['tx_hash']
                 tx_date = tx['tx_date']
                 tx_time = tx['tx_time']
                 tx_chain = tx['tx_chain']
                 file.write(f',{tx_hash},{tx_date},{tx_time},{tx_chain}\n')
-                print(f'{tx_date},{tx_time},{tx_chain}\n')
             
 
 def main():
     """
     Main function to orchestrate the data fetching, processing, and writing to CSV.
+    Orchestrates the flow of data from fetching, processing to writing it into a CSV file.
     """
     dirpath = Path("./out")
-    print("Main function started")
 
     if not dirpath.is_dir():
         os.mkdir(dirpath)
@@ -130,11 +136,3 @@ def main():
 if __name__ == "__main__":
     main()
 
-url = "https://phalcon.blocksec.com/api/v1/attack/events"
-json_data = {
-    "page": 1,
-    "pageSize": 200,
-    "endTime": 1735682399000,
-    "date": "desc"
-}
-data = make_request(url, json_data)
