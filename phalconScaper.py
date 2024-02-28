@@ -102,7 +102,7 @@ def write_to_csv(attack_incidents_list: list[AttackIncident]) -> None:
     Parameters:
         attack_incidents_list (list[AttackIncident]): The list of AttackIncident objects to write.
     """
-    with open('out/attack_incidents.csv', 'w') as file:
+    with open('out/attack_incidents_phalcon.csv', 'w') as file:
         file.write('Project, Loss, Vulnerability, root cause link, Transactions, Date, Time, Chain\n')
         for attack_incident in attack_incidents_list:
             file.write(f'{attack_incident.project},'
