@@ -3,18 +3,20 @@ from pathlib import Path
 import os
 from datetime import datetime
 
+
 class AttackIncident:
     """
     A class to represent an attack incident, encapsulating details about the project affected,
     the financial loss incurred, the type of vulnerability exploited, and the transactions involved.
-    
+
     Attributes:
         project (str): The name of the project attacked.
         loss (float): The financial loss incurred due to the attack, in USD.
         vulnerability (str): The type of vulnerability exploited in the attack.
         transactions (list): A list of dictionaries, each representing a transaction involved in the attack.
     """
-    def __init__(self, project: str, loss: float, vulnerability: str, transactions: list):
+
+    def __init__(self, project: str, loss: float, vulnerability: str, transactions: list, rootCause: str = None):
         self.project = project
         self.loss = loss
         self.vulnerability = vulnerability
@@ -24,11 +26,12 @@ class AttackIncident:
             new_tx['tx_hash'] = txn['txnHash']
             date, time = convert_txn_date(txn['txnHashDate'])
             new_tx['tx_date'] = date
-            new_tx['tx_time'] = time    
+            new_tx['tx_time'] = time
             new_tx['tx_chain'] = txn['chainId']
 
             transactions_data.append(new_tx)
         self.transactions = transactions_data
+        self.rootCause = rootCause
 
 
 def convert_txn_date(txn_hash_date: int) -> tuple[str, str]:
@@ -51,7 +54,6 @@ def convert_txn_date(txn_hash_date: int) -> tuple[str, str]:
     return date, time
 
 
-
 def process_data(data: dict) -> list[AttackIncident]:
     """
     Processes the raw data into a list of AttackIncident objects.
@@ -67,9 +69,12 @@ def process_data(data: dict) -> list[AttackIncident]:
         incident = AttackIncident(project=attack['project'],
                                   loss=attack['loss'],
                                   vulnerability=attack['rootCause'],
-                                  transactions=attack['transactions'])
+                                  transactions=attack['transactions'],
+                                  rootCause=attack['media']
+                                  )
         attack_incidents_list.append(incident)
     return attack_incidents_list
+
 
 def make_request(url: str, json_data: dict) -> dict:
     """
@@ -89,6 +94,7 @@ def make_request(url: str, json_data: dict) -> dict:
         print("Empty response received")
         return None
 
+
 def write_to_csv(attack_incidents_list: list[AttackIncident]) -> None:
     """
     Writes a list of AttackIncident objects to a CSV file, creating a structured report.
@@ -97,21 +103,19 @@ def write_to_csv(attack_incidents_list: list[AttackIncident]) -> None:
         attack_incidents_list (list[AttackIncident]): The list of AttackIncident objects to write.
     """
     with open('out/attack_incidents.csv', 'w') as file:
-        file.write('Project, Loss, Vulnerability, Transactions, Date, Time, Chain\n')
-        for attack_incident in attack_incidents_list:  
-            file.write(f'{attack_incident.project},\
-                {attack_incident.loss},\
-                {attack_incident.vulnerability}')
+        file.write('Project, Loss, Vulnerability, root cause link, Transactions, Date, Time, Chain\n')
+        for attack_incident in attack_incidents_list:
+            file.write(f'{attack_incident.project},'
+                   f'{attack_incident.loss},'
+                   f'{attack_incident.vulnerability},'
+                   f'{attack_incident.rootCause}')
+
+            # Write each transaction under the Transaction column
             for i, tx in enumerate(attack_incident.transactions):
-                # Write each transaction under the Transaction column
                 if i != 0:
-                    file.write(' , ,')
-                tx_hash = tx['tx_hash']
-                tx_date = tx['tx_date']
-                tx_time = tx['tx_time']
-                tx_chain = tx['tx_chain']
-                file.write(f',{tx_hash},{tx_date},{tx_time},{tx_chain}\n')
-            
+                    file.write(' , , ,')
+                file.write(f',{tx["tx_hash"]},{tx["tx_date"]},{tx["tx_time"]},{tx["tx_chain"]}\n')
+
 
 def main():
     """
@@ -122,17 +126,18 @@ def main():
 
     if not dirpath.is_dir():
         os.mkdir(dirpath)
+
     url = "https://phalcon.blocksec.com/api/v1/attack/events"
     json_data = {
         "page": 1,
         "pageSize": 200,
         "endTime": 1735682399000,
-        "date": "desc"
-    }
+        "date": "desc"}
+
     data = make_request(url, json_data)
     attack_incidents_list = process_data(data)
     write_to_csv(attack_incidents_list)
-    
+
+
 if __name__ == "__main__":
     main()
-
